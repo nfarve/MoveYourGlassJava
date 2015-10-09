@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">MoveYourGlass</string>
+    <string name="action_settings">Settings</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="Move">Tap to Start Move!</string>
+     <string name="stop">Stop</string>
+     <string name="open">Move</string>
+     <string name ="start">Start</string>
+     <string name= "Live">Move is running tap to stop</string>
+     <string name="Restarted">Move is running tap to stop</string>
+     <string name="Registration">Please visit moveserver.media.mit.edu/register and register with the following id:</string>
+     <string name="Number">#3afa3423424</string>
+     <string name="Stats">Stat</string>
+	<string name="TimeSit">Time spent sitting: </string>
+	<string name="TimeWalk">Time spent walking: </string>
+	<string name="TimeRun">Time spent running: </string>
+	<string name="Footer">Move Your Glass</string>
+</resources>
