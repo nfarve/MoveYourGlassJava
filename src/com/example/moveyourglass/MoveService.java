@@ -83,7 +83,6 @@ public class MoveService extends Service implements SensorEventListener{
 	public static final String PREFS_NAME = "MyPrefsFile";
 	public static String id; 
 	private ArrayList<Integer> actionList = new ArrayList<Integer>();
-	private ArrayList<Integer> copyOfactionList = new ArrayList<Integer>();
 	static String ip_address = "http://moveserver.media.mit.edu/";
 	static boolean suggestionFlag = false;
 	private Intent dialogIntent;
@@ -494,11 +493,12 @@ public class MoveService extends Service implements SensorEventListener{
 	    		if (walkingOccurrences <MAXWALKINGPOINTS){
 	    			cardGetUp();
 	    		}
-	    		else{
-	    			actionList.clear();
-	    		}
 	    	}
     	}
+    }
+    
+    public void updateDailyStat(){
+    	
     }
     public void cardLive(){
     	MainActivity.startFlag = true;
@@ -514,7 +514,6 @@ public class MoveService extends Service implements SensorEventListener{
     
     private void cardGetUp(){
     	actionList.clear();
-    	copyOfactionList.clear();
     	sittingCount=0; 
     	flag=false;
     	
