@@ -74,8 +74,8 @@ public class MoveService extends Service implements SensorEventListener{
     Handler handler2;
 	int PERIOD = 100; // read sensor data each 100 ms
 	int UPDATEPERIOD = 30; //how many minutes till update daily stats
-	int PROCESSBUFFERSIZE = 1000/PERIOD*60*UPDATEPERIOD;//size of the buffer before processing suggestions
-	int MAXWALKINGPOINTS = PROCESSBUFFERSIZE/30; //max number of walking points allowed in buffer to not issue flag
+	int PROCESSBUFFERSIZE = PERIOD*60*UPDATEPERIOD/1000;//size of the buffer before processing suggestions
+	int MAXWALKINGPOINTS = PROCESSBUFFERSIZE/UPDATEPERIOD; //max number of walking points allowed in buffer to not issue flag
 	boolean flag = false; //flag for update sensors 
 	boolean isHandlerLive = false;
 	private SensorManager mSensorManager;
@@ -510,9 +510,15 @@ public class MoveService extends Service implements SensorEventListener{
     		if (action ==1){
     			walkingCount+=1;
     		}
-    		if (walkingCount>=25){
+    		else if (action ==0){
+    			sittingCount++;
+    		}
+    		if (walkingCount>=MAXWALKINGPOINTS){
+    			currentStat.updateTotals(currentStat.getSittingTotal()+sittingCount/10, currentStat.getWalkingTotal()+walkingCount/10);
+    			sittingCount=0;
+    			walkingCount=0;
     			sendBroadcast(new Intent("xyz"));
-    			
+    			//turn off the suggestion Flag
     		}
     	}
     	else if (!suggestionFlag){
@@ -525,8 +531,7 @@ public class MoveService extends Service implements SensorEventListener{
 	    		actionList.add(action);
 	    		int walkingOccurrences = Collections.frequency(actionList, 1);
 	    		int sittingOccurrences = Collections.frequency(actionList, 0);
-	    		//TODO: Add a call to update daily state object
-	    		currentStat.updateTotals(sittingOccurrences/10, walkingOccurrences/10);
+	    		currentStat.updateTotals(currentStat.getSittingTotal()+sittingOccurrences/10, currentStat.getWalkingTotal()+walkingOccurrences/10);
 	    		writeDataToFile();
 	    		if (walkingOccurrences <MAXWALKINGPOINTS){
 	    			cardGetUp();

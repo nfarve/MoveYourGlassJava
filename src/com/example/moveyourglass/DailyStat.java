@@ -8,10 +8,10 @@ import java.util.List;
 public class DailyStat implements Serializable {
 	private LocalDate date;
 
-	private int walkingTotal = 0; //total time spent walking in seconds
-	private int sittingTotal = 0; //total time spent to sitting in seconds
+	private float walkingTotal = 0; //total time spent walking in seconds
+	private float sittingTotal = 0; //total time spent to sitting in seconds
 	//constructor
-	public DailyStat(int a, int b) {
+	public DailyStat(float a, float b) {
 		this.date = LocalDate.now();
 		this.walkingTotal = a; 
 		this.sittingTotal = b; 
@@ -38,17 +38,17 @@ public class DailyStat implements Serializable {
 		return this.date.toString();
 	}
 	
-	public int getWalkingTotal (){
+	public float getWalkingTotal (){
 		//get walking total in seconds for this object
 		return this.walkingTotal;
 	}
 	
-	public int getSittingTotal (){
+	public float getSittingTotal (){
 		//get sitting total in seconds for this object; 
 		return this.sittingTotal;
 	}
 	
-	public void updateTotals(int w, int s){
+	public void updateTotals(float w, float s){
 		//update the walking and sitting totals
 		walkingTotal = w; 
 		sittingTotal = s; 
