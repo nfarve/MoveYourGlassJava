@@ -1,13 +1,18 @@
 package com.example.moveyourglass;
 
+
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -52,6 +57,7 @@ import com.google.android.glass.widget.CardBuilder;
 import com.google.android.glass.timeline.LiveCard;
 import com.google.android.glass.timeline.LiveCard.PublishMode;
 import com.example.moveyourglass.ProcessFile;
+import com.example.moveyourglass.DailyStat;
 import com.google.android.glass.content.Intents;
 
  
@@ -93,6 +99,9 @@ public class MoveService extends Service implements SensorEventListener{
 	Timer writeDataTimer;
 	private String dataString = ""; 
 	ProcessFile process;
+	DailyStat currentStat; 
+	static List<DailyStat> statList;
+	private int processBufferCount = 0;
 	
 	 private final BroadcastReceiver broadCastReceiver = new BroadcastReceiver() {
 	        @Override
@@ -273,6 +282,44 @@ public class MoveService extends Service implements SensorEventListener{
 	   }
 	  
    }
+   
+   public void startUpVariableSet(){
+	   // get the user id
+	   SharedPreferences settings = getSharedPreferences(PREFS_NAME,0);
+       id = settings.getString("user_id", "0");
+       Log.i("Id", id);
+       if (id == "0"){
+       	Log.i("Id", "id is 0");
+       }
+       Log.i("Id", String.valueOf(id.length()));
+       while (id.equals("0")){
+       // First step if the id is 0 then it hasn't been set before and we need to get one from the server. 
+       	getID();
+       	id= settings.getString("user_id", "0");
+       	Log.i("Id", id + "writing it for the second time inside loop");
+       	Log.i("Id", "inside the loop!");
+       }
+       //read the dailystat data from the tempfile
+       try{
+			FileInputStream fis = new FileInputStream("MoveTempData.txt");
+			ObjectInputStream ois = new ObjectInputStream(fis);
+			@SuppressWarnings("unchecked")
+			List<DailyStat> statList = (List<DailyStat>) ois.readObject();
+			if (statList.get(statList.size()-1).compareDates(LocalDate.now())){
+				currentStat= statList.get(statList.size()-1);
+			}
+			else
+			{
+				currentStat = new DailyStat(0,0);
+				
+			}
+			ois.close();
+		}
+	    catch(Exception e){
+	    	e.printStackTrace();
+	    	statList =  new ArrayList<DailyStat>();
+	    }
+   }
  
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -280,20 +327,7 @@ public class MoveService extends Service implements SensorEventListener{
     		writeDataTimer = new Timer();
             writeDataTimer.schedule(new writeDataToFile(), 60*1000*5);
     	}
-    	SharedPreferences settings = getSharedPreferences(PREFS_NAME,0);
-        id = settings.getString("user_id", "0");
-        Log.i("Id", id);
-        if (id == "0"){
-        	Log.i("Id", "id is 0");
-        }
-        Log.i("Id", String.valueOf(id.length()));
-        while (id.equals("0")){
-        // First step if the id is 0 then it hasn't been set before and we need to get one from the server. 
-        	getID();
-        	id= settings.getString("user_id", "0");
-        	Log.i("Id", id + "writing it for the second time inside loop");
-        	Log.i("Id", "inside the loop!");
-        }
+    	startUpVariableSet();
         registerSensor();
        
  	    Log.d("Service", "onStartCommand Called");
@@ -471,7 +505,7 @@ public class MoveService extends Service implements SensorEventListener{
     }
 
     private void addValuetoActionList(int action){
-    	int size = actionList.size();
+    	//int size = actionList.size();
     	if (suggestionFlag & MODE==2){
     		if (action ==1){
     			walkingCount+=1;
@@ -482,17 +516,22 @@ public class MoveService extends Service implements SensorEventListener{
     		}
     	}
     	else if (!suggestionFlag){
-	    	if (size <=PROCESSBUFFERSIZE){
+	    	if (processBufferCount <=PROCESSBUFFERSIZE){
 	    		actionList.add(action);
+	    		processBufferCount++;
 	    	}
 	    	else{
 	    		actionList.remove(0);
 	    		actionList.add(action);
-	    		//TODO: Add a call to update daily state object
 	    		int walkingOccurrences = Collections.frequency(actionList, 1);
+	    		int sittingOccurrences = Collections.frequency(actionList, 0);
+	    		//TODO: Add a call to update daily state object
+	    		currentStat.updateTotals(sittingOccurrences/10, walkingOccurrences/10);
+	    		writeDataToFile();
 	    		if (walkingOccurrences <MAXWALKINGPOINTS){
 	    			cardGetUp();
 	    		}
+	    		processBufferCount=0;
 	    	}
     	}
     }
@@ -627,6 +666,18 @@ public class MoveService extends Service implements SensorEventListener{
     public IBinder onBind(Intent intent) {
     	
         return mBinder;
+    }
+    
+    private void writeDataToFile(){
+    	try{
+    		FileOutputStream fos = new FileOutputStream("MoveTempData.txt");
+			ObjectOutputStream oos = new ObjectOutputStream(fos);
+			oos.writeObject(statList);
+		    oos.close();
+		}
+	    catch(Exception e){
+	    	e.printStackTrace();
+	    }
     }
 }
 
