@@ -5,15 +5,20 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.StrictMode;
+import android.provider.Settings;
 import android.app.Activity;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 
 
@@ -52,6 +57,25 @@ public class MainActivity extends Activity{
 	     }
         
 	   }
+    
+    private final DialogInterface.OnClickListener mOnClickListener =
+            new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int button) {
+                        // Open WiFi Settings
+                        startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                    }
+            };
+    
+    private BroadcastReceiver mMessageReceiver = new BroadcastReceiver() {
+    	  @Override
+    	  public void onReceive(Context context, Intent intent) {
+    	    // Extract data included in the Intent
+    	  new InternetDialog(context, R.drawable.ic_cloud_sad_150, R.string.internet_alert_text,
+   		       R.string.internet_alert_footnote_text, mOnClickListener).show();
+    	  }
+    	};
+    
     private ServiceConnection mConnection = new ServiceConnection() {
 		
         @Override
@@ -152,21 +176,14 @@ public class MainActivity extends Activity{
 	  protected void onPause(){
 		  super.onPause();
 		  Log.d("debug", "On Pause called in Main Activity");
+		  LocalBroadcastManager.getInstance(this).unregisterReceiver(mMessageReceiver);
 	  }
 	  
 	  @Override 
 	  protected void onResume(){
 		  super.onResume();
-//		  if (suggestionFlag){
-//			  Log.d("debug", "restarting processSensors");
-//			  startService(intent);
-//			  mService = binder.getService();
-//			  mService.handler.postAtTime(mService.processSensors, System.currentTimeMillis());
-//			  mService.handler.postDelayed(mService.processSensors, PERIOD);
-//  			  mService.cardLive();
-//  			  suggestionFlag = false;
-//		  }
-		  
+		  LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver,
+			      new IntentFilter("internet"));
 		  Log.d("debug", "On Resume called in Main Activity");
 	  }
 	  

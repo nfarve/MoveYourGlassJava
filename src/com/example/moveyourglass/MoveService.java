@@ -11,9 +11,10 @@ import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
-import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -33,6 +34,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -48,6 +50,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.StrictMode;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
@@ -97,11 +100,13 @@ public class MoveService extends Service implements SensorEventListener{
 	Timer removeFlagTimer;
 	Timer checkRegTimer;
 	Timer writeDataTimer;
+	Timer internetTimer;
 	private String dataString = ""; 
 	ProcessFile process;
 	DailyStat currentStat; 
 	static List<DailyStat> statList;
 	private int processBufferCount = 0;
+	Timer suggestionCardTimer;
 	
 	 private final BroadcastReceiver broadCastReceiver = new BroadcastReceiver() {
 	        @Override
@@ -117,11 +122,15 @@ public class MoveService extends Service implements SensorEventListener{
 	                       //re-enable sensors
 	                        flag = true;
 	                        registerSensor();
+	                        suggestionCardTimer = new Timer(); 
+	             	    	suggestionCardTimer.scheduleAtFixedRate(new showSuggestion(), 60*60*1000, 60*60*1000);
 	                    }
 	                } else {
 	                    //disable sensor
 	                	 flag = false;
 	                	 unregisterSensor();
+	                	 suggestionCardTimer.cancel();
+	                 	 suggestionCardTimer.purge();
 	                }
 	            }
 	        }
@@ -161,31 +170,14 @@ public class MoveService extends Service implements SensorEventListener{
     	}
     }
    
+
+
 	 @Override
 	  public final void onAccuracyChanged(Sensor sensor, int accuracy) {
   	    // Do something here if sensor accuracy changes.
   	  }
   	  
-  	  
-  	  
-  	  public static class MovementParams{
-  		  	String userid;
-  		  	float x; 
-  			float y; 
-  			float z;
-  			String url;
-  			String flag;
-  			
-  			MovementParams(float x, float y, float z, String flag){
-  				this.userid = id;
-  				this.x = x; 
-  				this.y= y; 
-  				this.z= z;
-  				this.url=ip_address+"process/";
-  				this.flag = flag;
-  			}
-  			
-  		}
+ 
 
   	@Override
   	  public final void onSensorChanged(SensorEvent event) {
@@ -300,17 +292,30 @@ public class MoveService extends Service implements SensorEventListener{
        	Log.i("Id", "inside the loop!");
        }
        //read the dailystat data from the tempfile
+       File directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+       String name = "MoveTempData.txt";
+       File file = new File(directory, name);
        try{
-			FileInputStream fis = new FileInputStream("MoveTempData.txt");
+			FileInputStream fis = new FileInputStream(file);
 			ObjectInputStream ois = new ObjectInputStream(fis);
 			@SuppressWarnings("unchecked")
-			List<DailyStat> statList = (List<DailyStat>) ois.readObject();
-			if (statList.get(statList.size()-1).compareDates(LocalDate.now())){
-				currentStat= statList.get(statList.size()-1);
-			}
+			List<DailyStat> dump = (List<DailyStat>) ois.readObject();
+			if (dump.size()>0){
+				statList=dump;
+				if (dump.get(statList.size()-1).compareDates(Calendar.getInstance()) ){
+					currentStat= statList.get(statList.size()-1);
+					Log.d("currentStats", currentStat.getSittingTotal()+","+currentStat.getWalkingTotal());				}
+				else
+				{
+					currentStat = new DailyStat(0,0);
+					currentStat.addObject(statList);
+					
+				}
+			}	
 			else
 			{
 				currentStat = new DailyStat(0,0);
+				currentStat.addObject(statList);
 				
 			}
 			ois.close();
@@ -318,6 +323,9 @@ public class MoveService extends Service implements SensorEventListener{
 	    catch(Exception e){
 	    	e.printStackTrace();
 	    	statList =  new ArrayList<DailyStat>();
+	    	currentStat = new DailyStat(0,0);
+			currentStat.addObject(statList);
+	    	writeDataToFile();
 	    }
    }
  
@@ -329,6 +337,8 @@ public class MoveService extends Service implements SensorEventListener{
     	}
     	startUpVariableSet();
         registerSensor();
+        internetTimer = new Timer();
+        internetTimer.scheduleAtFixedRate(new internetTask(), 0, 60*1000);
        
  	    Log.d("Service", "onStartCommand Called");
         /**
@@ -337,6 +347,12 @@ public class MoveService extends Service implements SensorEventListener{
          */
 // 	    Log.d("debug", "SuggestionFlag: "+ String.valueOf(suggestionFlag));
 // 	    Log.d("debug", "mLiveCard: "+ String.valueOf(mLiveCard));
+ 	    
+ 	    if (MODE ==1){
+ 	    	suggestionCardTimer = new Timer(); 
+ 	    	suggestionCardTimer.scheduleAtFixedRate(new showSuggestion(), 60*60*1000, 60*60*1000);
+ 	    }
+ 	    
 	    if (suggestionFlag) {
 	    	Log.i("info","Suggestion flag up");
 	    	startCard();
@@ -440,7 +456,35 @@ public class MoveService extends Service implements SensorEventListener{
     	Log.i("Waiting", "waiting...");
 	   }
     }
-    
+   
+   class internetTask extends TimerTask{
+	   public void run(){
+		   try {
+		        Process p1 = java.lang.Runtime.getRuntime().exec("ping -c 1 www.google.com");
+		        int returnVal = p1.waitFor();
+		        boolean reachable = (returnVal==0);
+				for(int i = 0; i < statList.size(); i++) {
+					if (!statList.get(i).getSent()){
+						postData(statList.get(i));
+					}
+				}
+		        
+		        return;
+		        
+		    } catch (Exception e) {
+		        // TODO Auto-generated catch block
+		        e.printStackTrace();
+		    }
+		   sendMessage();
+		   return;
+		}
+   }
+ 
+   	private void sendMessage() {
+	   Intent intent = new Intent("internet");
+	   // add data
+	   LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+	 }
     private String pingStatus(){
     	String holder = "";
     	//Log.i("info", "url is:"+urlIs);
@@ -479,6 +523,12 @@ public class MoveService extends Service implements SensorEventListener{
     	}
     }
     
+    class showSuggestion extends TimerTask{
+    	public void run(){
+    		cardGetUp();
+    	}
+    }
+    
     public void startCard(){
     	if (mLiveCard != null){
     		if (mLiveCard.isPublished()){
@@ -506,7 +556,9 @@ public class MoveService extends Service implements SensorEventListener{
 
     private void addValuetoActionList(int action){
     	//int size = actionList.size();
-    	if (suggestionFlag & MODE==2){
+//    	Log.d("process", String.valueOf(action));
+    	if (suggestionFlag){
+    		
     		if (action ==1){
     			walkingCount+=1;
     		}
@@ -515,8 +567,10 @@ public class MoveService extends Service implements SensorEventListener{
     		}
     		if (walkingCount>=MAXWALKINGPOINTS){
     			currentStat.updateTotals(currentStat.getSittingTotal()+sittingCount/10, currentStat.getWalkingTotal()+walkingCount/10);
+    			Log.d("currentStats", currentStat.getSittingTotal()+","+currentStat.getWalkingTotal());
     			sittingCount=0;
     			walkingCount=0;
+    			writeDataToFile();
     			sendBroadcast(new Intent("xyz"));
     			//turn off the suggestion Flag
     		}
@@ -532,9 +586,12 @@ public class MoveService extends Service implements SensorEventListener{
 	    		int walkingOccurrences = Collections.frequency(actionList, 1);
 	    		int sittingOccurrences = Collections.frequency(actionList, 0);
 	    		currentStat.updateTotals(currentStat.getSittingTotal()+sittingOccurrences/10, currentStat.getWalkingTotal()+walkingOccurrences/10);
+    			Log.d("currentStats", currentStat.getSittingTotal()+","+currentStat.getWalkingTotal());
 	    		writeDataToFile();
 	    		if (walkingOccurrences <MAXWALKINGPOINTS){
 	    			cardGetUp();
+	    		}else{
+	    			actionList.clear();
 	    		}
 	    		processBufferCount=0;
 	    	}
@@ -560,22 +617,26 @@ public class MoveService extends Service implements SensorEventListener{
     	actionList.clear();
     	sittingCount=0; 
     	flag=false;
-    	
-    	if (MODE == 2){
-    		dialogIntent = new Intent(getBaseContext(), SuggestionActivity.class);
-        	dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        	getApplication().startActivity(dialogIntent);
-        	suggestionFlag=true;
-        	MainActivity.changeSuggestionState();
-    	}
-    	
-    	else if (MODE == 1){
-    		MediaPlayer mediaPlayer = MediaPlayer.create(getBaseContext(), R.raw.sound);
-        	mediaPlayer.start(); // no need to call prepare(); create() does that for you
-        	suggestionFlag=true;
-        	removeFlagTimer = new Timer();
-        	removeFlagTimer.schedule(new RemoveFlag(), 60*1000);
-    	}
+    	dialogIntent = new Intent(getBaseContext(), SuggestionActivity.class);
+    	dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    	getApplication().startActivity(dialogIntent);
+    	suggestionFlag=true;
+    	MainActivity.changeSuggestionState();
+//    	if (MODE == 2){
+//    		dialogIntent = new Intent(getBaseContext(), SuggestionActivity.class);
+//    	dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+//    	getApplication().startActivity(dialogIntent);
+//    	suggestionFlag=true;
+//    	MainActivity.changeSuggestionState();
+//    	}
+//    	
+//    	else if (MODE == 1){
+//    		MediaPlayer mediaPlayer = MediaPlayer.create(getBaseContext(), R.raw.sound);
+//        	mediaPlayer.start(); // no need to call prepare(); create() does that for you
+//        	suggestionFlag=true;
+//        	removeFlagTimer = new Timer();
+//        	removeFlagTimer.schedule(new RemoveFlag(), 60*1000);
+//    	}
     	
     	//mLiveCard.unpublish();
     	
@@ -642,6 +703,9 @@ public class MoveService extends Service implements SensorEventListener{
     
     @Override
     public void onDestroy() {
+    	suggestionCardTimer.cancel();
+    	suggestionCardTimer.purge();
+    	writeDataToFile();
         if (mLiveCard != null && mLiveCard.isPublished()) {
          
             Log.d(TAG, "Unpublishing LiveCard");
@@ -674,8 +738,11 @@ public class MoveService extends Service implements SensorEventListener{
     }
     
     private void writeDataToFile(){
+    	File directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+		String name = "MoveTempData.txt";
+		File file = new File(directory, name);
     	try{
-    		FileOutputStream fos = new FileOutputStream("MoveTempData.txt");
+    		FileOutputStream fos = new FileOutputStream(file);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
 			oos.writeObject(statList);
 		    oos.close();
@@ -684,6 +751,34 @@ public class MoveService extends Service implements SensorEventListener{
 	    	e.printStackTrace();
 	    }
     }
+    
+    public static String postData(DailyStat stat) {
+		    // Create a new HttpClient and Post Header
+
+		  	String result = "";
+		  	HttpClient httpclient = new DefaultHttpClient();
+	    	HttpPost httpPost = new HttpPost(ip_address+"process/stats/");
+	    	try{
+	    	List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
+	    	nameValuePairs.add(new BasicNameValuePair("userid",id ));
+	        nameValuePairs.add(new BasicNameValuePair("date", stat.getDate()));
+	        nameValuePairs.add(new BasicNameValuePair("walkingTime", String.valueOf(stat.getWalkingTotal())));
+	        nameValuePairs.add(new BasicNameValuePair("sittingTime", String.valueOf(stat.getSittingTotal())));
+	        nameValuePairs.add(new BasicNameValuePair("suggestionCount",String.valueOf(stat.getSuggestions())));
+	     
+	        httpPost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+	        
+	         ResponseHandler<String> responseHandler=new BasicResponseHandler();
+	         String responseBody = httpclient.execute(httpPost, responseHandler);
+	         return responseBody;
+
+	  	} catch (ClientProtocolException e) {
+	        // TODO Auto-generated catch block
+	    } catch (IOException e) {
+	        // TODO Auto-generated catch block
+	    }
+		    return  result; 
+		}
 }
 
 /***
@@ -705,34 +800,52 @@ Trash code
   	  }
   	  
   	 
-  	  public static String postData(float x, float y, float z, String url, String flag) {
-  		    // Create a new HttpClient and Post Header
- 
-  		  	String result = "";
-  		  	HttpClient httpclient = new DefaultHttpClient();
-		    	HttpPost httpPost = new HttpPost(url);
-		    	try{
-		    	List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
-		    	nameValuePairs.add(new BasicNameValuePair("userid", id));
-		        nameValuePairs.add(new BasicNameValuePair("x", Float.toString(x)));
-		        nameValuePairs.add(new BasicNameValuePair("y", Float.toString(y)));
-		        nameValuePairs.add(new BasicNameValuePair("z", Float.toString(z)));
-		        nameValuePairs.add(new BasicNameValuePair("flag",flag));
-		     
-		        httpPost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-		        
-		         ResponseHandler<String> responseHandler=new BasicResponseHandler();
-		         String responseBody = httpclient.execute(httpPost, responseHandler);
-		         return responseBody;
-
-  	  	} catch (ClientProtocolException e) {
-  	        // TODO Auto-generated catch block
-  	    } catch (IOException e) {
-  	        // TODO Auto-generated catch block
-  	    }
-  		    return  result; 
+//  	  public static String postData(float x, float y, float z, String url, String flag) {
+//  		    // Create a new HttpClient and Post Header
+// 
+//  		  	String result = "";
+//  		  	HttpClient httpclient = new DefaultHttpClient();
+//		    	HttpPost httpPost = new HttpPost(url);
+//		    	try{
+//		    	List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
+//		    	nameValuePairs.add(new BasicNameValuePair("userid", id));
+//		        nameValuePairs.add(new BasicNameValuePair("x", Float.toString(x)));
+//		        nameValuePairs.add(new BasicNameValuePair("y", Float.toString(y)));
+//		        nameValuePairs.add(new BasicNameValuePair("z", Float.toString(z)));
+//		        nameValuePairs.add(new BasicNameValuePair("flag",flag));
+//		     
+//		        httpPost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+//		        
+//		         ResponseHandler<String> responseHandler=new BasicResponseHandler();
+//		         String responseBody = httpclient.execute(httpPost, responseHandler);
+//		         return responseBody;
+//
+//  	  	} catch (ClientProtocolException e) {
+//  	        // TODO Auto-generated catch block
+//  	    } catch (IOException e) {
+//  	        // TODO Auto-generated catch block
+//  	    }
+//  		    return  result; 
+//  		}
+  	    	  
+  	  public static class MovementParams{
+  		  	String userid;
+  		  	float x; 
+  			float y; 
+  			float z;
+  			String url;
+  			String flag;
+  			
+  			MovementParams(float x, float y, float z, String flag){
+  				this.userid = id;
+  				this.x = x; 
+  				this.y= y; 
+  				this.z= z;
+  				this.url=ip_address+"process/";
+  				this.flag = flag;
+  			}
+  			
   		}
-  	  
   	  private class HttpAsyncTask extends AsyncTask<MovementParams, Void, String>{
   	  
   		  @Override

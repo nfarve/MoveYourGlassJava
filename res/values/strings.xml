@@ -17,4 +17,6 @@
 	<string name="TimeWalk">Time spent walking: </string>
 	<string name="TimeRun">Time spent running: </string>
 	<string name="Footer">Move Your Glass</string>
+	<string name="internet_alert_text">No Internet Connectivity</string>
+	<string name="internet_alert_footnote_text">Tap to view connectivity settings</string>
 </resources>

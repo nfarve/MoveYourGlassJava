@@ -1,62 +1,78 @@
 package com.example.moveyourglass;
 
-
 import java.io.Serializable;
-import java.time.LocalDate;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.List;
 
-public class DailyStat implements Serializable {
-	private LocalDate date;
 
-	private float walkingTotal = 0; //total time spent walking in seconds
-	private float sittingTotal = 0; //total time spent to sitting in seconds
+public class DailyStat implements Serializable{
+	private Calendar date;
+	DateFormat dateformat = new SimpleDateFormat("MM/dd/yyyy");
+	private int walkingTotal = 0;
+	private int sittingTotal = 0;
+	private int numberSuggestions; 
+	boolean sent; 
 	//constructor
-	public DailyStat(float a, float b) {
-		this.date = LocalDate.now();
+	public DailyStat(int a, int b) {
+		this.date = date.getInstance();
 		this.walkingTotal = a; 
 		this.sittingTotal = b; 
+		this.numberSuggestions = 0;
+		this.sent = false;
 	}
 	
 	public void update(int a, int b){
-		//update the walking and sitting totals
 		walkingTotal = a; 
 		sittingTotal = b; 
 	}
 	
+	public void updateSuggestions(int sugg){
+		this.numberSuggestions = sugg;
+	}
+	
+	public void updateSent(boolean Sent){
+		this.sent = Sent;
+	}
+	
 	public void addObject(List<DailyStat> list){
-		//add DailyStat object to list
 		list.add(this);
 	}
 	
 	public void removeObject(List<DailyStat> list){
-		//remove DailyStat object from list
 		list.remove(this);
 	}
 	
 	public String getDate(){
-		//get Date for this DailyStat object
-		return this.date.toString();
+		return dateformat.format(this.date.getTime());
 	}
 	
-	public float getWalkingTotal (){
-		//get walking total in seconds for this object
+	
+	public int getWalkingTotal (){
 		return this.walkingTotal;
 	}
 	
-	public float getSittingTotal (){
-		//get sitting total in seconds for this object; 
+	public int getSittingTotal (){
 		return this.sittingTotal;
 	}
 	
-	public void updateTotals(float w, float s){
-		//update the walking and sitting totals
+	public int getSuggestions(){
+		return this.numberSuggestions;
+	}
+	
+	public boolean getSent(){
+		return this.sent;
+	}
+	
+	public void updateTotals(int w, int s){
 		walkingTotal = w; 
 		sittingTotal = s; 
 	}
 	
-	public boolean compareDates(LocalDate now){
-		//compare the date given date with the date that Daily Object was created
-		return this.date.equals(now);
+	public boolean compareDates(Calendar now){
+		return (dateformat.format(date.getTime()).equals(dateformat.format(now.getTime())));
 	}
+	   
 }
 
